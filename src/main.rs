@@ -20,7 +20,7 @@ mod serial;
 struct Args {
     // Path to the DMX serial device
     #[arg(long, short, default_value = "/dev/ttyUSB0")]
-    port: String,
+    device: String,
 
     // IP Address to bind the UDP socket
     #[arg(long, short, default_value = "0.0.0.0:1337")]
@@ -29,7 +29,7 @@ struct Args {
     // Mode of configuration
     #[arg(value_enum, long, short, default_value = "termios2")]
     mode: dmx::Mode,
-    
+
     // Throttle DMX writes to avoid flooding
     #[arg(long, short, default_value = "45")]
     throttle: u64,
@@ -58,8 +58,11 @@ fn main() -> std::io::Result<()> {
     println!("Binding to: {}", args.bind);
     socket.bind(&args.bind.into())?;
 
-    println!("Opening DMX port: {} in {:?} mode", args.port, args.mode);
-    let dmx_port = dmx::Port::open(args.port.as_str(), args.mode)?;
+    println!(
+        "Opening DMX device: {} in {:?} mode",
+        args.device, args.mode
+    );
+    let dmx_port = dmx::Port::open(args.device.as_str(), args.mode)?;
 
     let mut mask = SigSet::empty();
     mask.add(Signal::SIGINT);
@@ -108,8 +111,8 @@ fn main() -> std::io::Result<()> {
                     if let Some(info) = sigfd.read_signal()? {
                         match (info.ssi_signo as i32).try_into() {
                             Ok(Signal::SIGINT) => {
-                                // Handle SIGUSR1 signal
-                                println!("Received SIGUSR1 signal, exiting...");
+                                // Handle SIGINT signal
+                                println!("Received SIGINT signal, exiting...");
                                 exiting = true;
                             }
                             Ok(Signal::SIGTERM) => {
@@ -133,7 +136,9 @@ fn main() -> std::io::Result<()> {
                 }
                 EVENT_DMX_PORT_NUM => {
                     let now = nix::time::clock_gettime(nix::time::ClockId::CLOCK_MONOTONIC)?;
-                    if now - dmx_write_throttle < TimeSpec::from(Duration::from_millis(1000 / args.throttle)) {
+                    if now - dmx_write_throttle
+                        < TimeSpec::from(Duration::from_millis(1000 / args.throttle))
+                    {
                         // Throttle DMX writes to avoid flooding
                         continue;
                     }

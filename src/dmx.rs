@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::serial;
 use crate::serial::{ASYNC_LOW_LATENCY, ASYNC_SPD_CUST, tcsets};
 use clap_derive::ValueEnum;
@@ -78,69 +77,75 @@ impl FromStr for Mode {
 }
 
 impl Port {
-    pub fn fd(&self) -> c_int {
-        self.fd
+    fn configure_termios2(fd: c_int) -> Result<ResetMode, std::io::Error> {
+        // Get the old termios settings
+        let oldtios = serial::tcgets2(fd)?;
+        // Set the termios settings for DMX
+        let mut tios2 = oldtios;
+        tios2.c_cflag |= libc::CLOCAL | libc::CREAD; // Enable receiver and local mode
+        tios2.c_cflag &= !(libc::CSIZE | libc::PARENB | libc::CBAUD | libc::CBAUDEX); // 8N1 configuration
+        tios2.c_cflag |= libc::CS8 | BOTHER; // 8 data bits
+        tios2.c_iflag &= !(libc::IGNBRK
+            | libc::BRKINT
+            | libc::PARMRK
+            | libc::ISTRIP
+            | libc::INLCR
+            | libc::IGNCR
+            | libc::ICRNL);
+        tios2.c_ospeed = 250000;
+        tios2.c_ispeed = 250000;
+        serial::tcsets2(fd, &tios2)?;
+        Ok(ResetMode::ResetTios2(oldtios))
+    }
+
+    fn configure_set_serial(fd: c_int) -> Result<ResetMode, std::io::Error> {
+        // Set the termios settings for DMX
+        let oldtios = serial::tcgets(fd)?;
+        let mut tios = oldtios;
+        tios.c_cflag |= libc::CLOCAL | libc::CREAD; // Enable receiver and local mode
+        tios.c_cflag &= !(libc::CSIZE | libc::PARENB | libc::CBAUD | libc::CBAUDEX); // 8N1 configuration
+        tios.c_cflag |= libc::CS8 | libc::B38400; // 8 data bits
+        tios.c_iflag &= !(libc::IGNBRK
+            | libc::BRKINT
+            | libc::PARMRK
+            | libc::ISTRIP
+            | libc::INLCR
+            | libc::IGNCR
+            | libc::ICRNL);
+        tcsets(fd, &oldtios)?;
+
+        // Get the serial settings
+        let ss = serial::get_serial(fd)?;
+        let divisor = ss.baud_base / 250000;
+        if divisor == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Invalid baud rate divisor (0)",
+            ));
+        }
+        println!("Baud base: {}", ss.baud_base);
+        println!("Divisor={}", divisor);
+        let new_baud = ss.baud_base / divisor;
+        
+        // Set the serial settings for DMX
+        let mut new_ss = ss;
+        new_ss.custom_divisor = divisor;
+        new_ss.flags = (ASYNC_SPD_CUST | ASYNC_LOW_LATENCY) as c_int;
+        println!("Setting DMX baud rate to: {} Hz", ss.baud_base / divisor);
+        println!(
+            "Speed error rate: {}%",
+            new_baud as f64 / 250000f64 * 100.0f64
+        );
+        serial::set_serial(fd, &new_ss)?;
+        Ok(ResetMode::ResetSerial((ss, oldtios)))
     }
 
     pub fn open(path: &str, mode: Mode) -> Result<Self, std::io::Error> {
         let fd = open(path)?;
-
         let reset = match mode {
-            Mode::Termios2 => {
-                // Get the old termios settings
-                let oldtios = serial::tcgets2(fd)?;
-                // Set the termios settings for DMX
-                let mut tios2 = oldtios;
-                tios2.c_cflag |= libc::CLOCAL | libc::CREAD; // Enable receiver and local mode
-                tios2.c_cflag &= !(libc::CSIZE | libc::PARENB | libc::CBAUD | libc::CBAUDEX); // 8N1 configuration
-                tios2.c_cflag |= libc::CS8 | BOTHER; // 8 data bits
-                tios2.c_iflag &= !(libc::IGNBRK
-                    | libc::BRKINT
-                    | libc::PARMRK
-                    | libc::ISTRIP
-                    | libc::INLCR
-                    | libc::IGNCR
-                    | libc::ICRNL);
-                tios2.c_ospeed = 250000;
-                tios2.c_ispeed = 250000;
-                serial::tcsets2(fd, &tios2)?;
-                ResetMode::ResetTios2(oldtios)
-            }
-            Mode::SetSerial => {
-                // Set the termios settings for DMX
-                let oldtios = serial::tcgets(fd)?;
-                let mut tios = oldtios;
-                tios.c_cflag |= libc::CLOCAL | libc::CREAD; // Enable receiver and local mode
-                tios.c_cflag &= !(libc::CSIZE | libc::PARENB | libc::CBAUD | libc::CBAUDEX); // 8N1 configuration
-                tios.c_cflag |= libc::CS8 | libc::B38400; // 8 data bits
-                tios.c_iflag &= !(libc::IGNBRK
-                    | libc::BRKINT
-                    | libc::PARMRK
-                    | libc::ISTRIP
-                    | libc::INLCR
-                    | libc::IGNCR
-                    | libc::ICRNL);
-                tcsets(fd, &oldtios)?;
-
-                // Get the serial settings
-                let ss = serial::get_serial(fd)?;
-                let divisor = ss.baud_base / 250000;
-                if divisor == 0 {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        "Invalid baud rate divisor",
-                    ));
-                }
-                // Set the serial settings for DMX
-                let mut new_ss = ss;
-                new_ss.baud_base = 250000;
-                new_ss.flags = (ASYNC_SPD_CUST | ASYNC_LOW_LATENCY) as c_int;
-                dbg!("Baud base={}, divisor={}", ss.baud_base, divisor);
-                dbg!("Setting DMX baud rate to: {}", divisor);
-                serial::set_serial(fd, &new_ss)?;
-                ResetMode::ResetSerial((ss, oldtios))
-            }
-        };
+            Mode::Termios2 => Self::configure_termios2(fd),
+            Mode::SetSerial => Self::configure_set_serial(fd),
+        }?;
         Ok(Port { fd, reset })
     }
 
@@ -150,7 +155,7 @@ impl Port {
             tcdrain(self.fd);
         }
         serial::set_brk(self.fd)?;
-        // sleep for 120 us - Break (BRK)
+        // sleep for 138 us - Break (BRK)
         spin_sleep(core::time::Duration::from_micros(138));
         serial::clear_break(self.fd)?;
         // sleep for 12 us - mark after break (MAB)
