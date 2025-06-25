@@ -6,7 +6,7 @@ use std::ffi::CString;
 use std::os::fd::AsFd;
 use std::str::FromStr;
 
-// Good reference for dmx packet / timing 
+// Good reference for dmx packet / timing
 // https://support.etcconnect.com/ETC/FAQ/DMX_Speed
 
 fn spin_sleep(duration: std::time::Duration) {
@@ -46,12 +46,21 @@ impl Drop for Port {
         match &self.reset {
             ResetMode::ResetTios2(oldtios) => {
                 // Reset the termios settings to the old settings
-                serial::tcsets2(self.fd, oldtios).expect("Failed to reset termios settings");
+                _ = serial::tcsets2(self.fd, oldtios).or_else(|e| {
+                    println!("Failed to reset termios settings: {}", e);
+                    Err(e)
+                });
             }
             ResetMode::ResetSerial((oldserial, oldtermios)) => {
                 // Reset the serial settings to the old settings
-                tcsets(self.fd, oldtermios).expect("Failed to reset termios settings");
-                serial::set_serial(self.fd, oldserial).expect("Failed to reset serial settings");
+                _ = tcsets(self.fd, oldtermios).or_else(|e| {
+                    println!("Failed to reset termios settings");
+                    Err(e)
+                });
+                _ = serial::set_serial(self.fd, oldserial).or_else(|e| {
+                    println!("Failed to reset serial settings");
+                    Err(e)
+                });
             }
         }
         // Close the file descriptor
@@ -129,7 +138,7 @@ impl Port {
         println!("Baud base: {}", ss.baud_base);
         println!("Divisor={}", divisor);
         let new_baud = ss.baud_base / divisor;
-        
+
         // Set the serial settings for DMX
         let mut new_ss = ss;
         new_ss.custom_divisor = divisor;

@@ -145,6 +145,7 @@ fn main() -> std::io::Result<()> {
                     // Write DMX data to the port
                     if let Err(e) = dmx_port.write(&dmx_data) {
                         eprintln!("Failed to write DMX data: {}", e);
+                        exiting = true;
                     }
                     dmx_frames += 1; // Increment DMX frame count
                     dmx_write_throttle =
