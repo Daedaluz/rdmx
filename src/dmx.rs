@@ -6,6 +6,9 @@ use std::ffi::CString;
 use std::os::fd::AsFd;
 use std::str::FromStr;
 
+// Good reference for dmx packet / timing 
+// https://support.etcconnect.com/ETC/FAQ/DMX_Speed
+
 fn spin_sleep(duration: std::time::Duration) {
     let start = std::time::Instant::now();
     while start.elapsed() < duration {
