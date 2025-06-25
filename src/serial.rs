@@ -25,8 +25,17 @@ pub fn tcsets2(fd: i32, tios: &termios2) -> Result<(), std::io::Error> {
     }
 }
 
-pub fn set_brk(fd: c_int, bk: c_int) -> Result<(), std::io::Error> {
-    let res = unsafe { ioctl(fd, TIOCSBRK as _, bk) };
+pub fn set_brk(fd: c_int) -> Result<(), std::io::Error> {
+    let res = unsafe { ioctl(fd, TIOCSBRK as _) };
+    if res == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+pub fn clear_break(fd: c_int) -> Result<(), std::io::Error> {
+    let res = unsafe { ioctl(fd, TIOCCBRK as _) };
     if res == 0 {
         Ok(())
     } else {

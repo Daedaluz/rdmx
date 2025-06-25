@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 use crate::serial;
 use crate::serial::{ASYNC_LOW_LATENCY, ASYNC_SPD_CUST, tcsets};
+use clap_derive::ValueEnum;
 use libc::{BOTHER, c_int, tcdrain, termios};
 use std::ffi::CString;
 use std::os::fd::AsFd;
 use std::str::FromStr;
-use clap_derive::ValueEnum;
 
 fn spin_sleep(duration: std::time::Duration) {
     let start = std::time::Instant::now();
@@ -71,7 +71,7 @@ impl FromStr for Mode {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().as_str() {
             "TERMIOS2" => Ok(Mode::Termios2),
-            "SETSERIAL" => Ok(Mode::SetSerial),
+            "SET-SERIAL" => Ok(Mode::SetSerial),
             _ => Err(format!("Invalid mode: {}", s)),
         }
     }
@@ -149,12 +149,12 @@ impl Port {
         unsafe {
             tcdrain(self.fd);
         }
-        serial::set_brk(self.fd, 1)?;
+        serial::set_brk(self.fd)?;
         // sleep for 120 us - Break (BRK)
-        spin_sleep(core::time::Duration::from_micros(120));
-        serial::set_brk(self.fd, 0)?;
+        spin_sleep(core::time::Duration::from_micros(138));
+        serial::clear_break(self.fd)?;
         // sleep for 12 us - mark after break (MAB)
-        spin_sleep(core::time::Duration::from_micros(12));
+        //spin_sleep(core::time::Duration::from_micros(12));
         // Write the buffer to the DMX port - typically 513 bytes (512 channels + 1 start code)
         let res = unsafe { libc::write(self.fd, buf.as_ptr() as *const libc::c_void, buf.len()) };
         if res < 0 {
