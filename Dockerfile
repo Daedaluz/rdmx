@@ -7,6 +7,6 @@ WORKDIR /src
 COPY . .
 RUN cargo install --path .
 
-FROM rust:slim-bookworm
+FROM debian:bookworm-slim
 COPY --from=build /src/target/release/rdmx /usr/bin/rdmx
 CMD ["rdmx"]
