@@ -1,7 +1,11 @@
 use crate::serial;
 use crate::serial::{ASYNC_LOW_LATENCY, ASYNC_SPD_CUST, tcsets};
 use clap_derive::ValueEnum;
-use libc::{BOTHER, c_int, tcdrain, termios};
+use libc::{
+    B38400, BOTHER, BRKINT, CBAUD, CBAUDEX, CLOCAL, CREAD, CRTSCTS, CS8, CSIZE, CSTOPB, ECHO,
+    ECHOE, ECHONL, ICANON, ICRNL, IGNBRK, IGNCR, INLCR, ISIG, ISTRIP, IXANY, IXOFF, IXON, ONLCR,
+    OPOST, PARENB, PARMRK, c_int, tcdrain, termios,
+};
 use std::ffi::CString;
 use std::os::fd::AsFd;
 use std::str::FromStr;
@@ -94,16 +98,12 @@ impl Port {
         let oldtios = serial::tcgets2(fd)?;
         // Set the termios settings for DMX
         let mut tios2 = oldtios;
-        tios2.c_cflag |= libc::CLOCAL | libc::CREAD; // Enable receiver and local mode
-        tios2.c_cflag &= !(libc::CSIZE | libc::PARENB | libc::CBAUD | libc::CBAUDEX); // 8N1 configuration
-        tios2.c_cflag |= libc::CS8 | BOTHER; // 8 data bits
-        tios2.c_iflag &= !(libc::IGNBRK
-            | libc::BRKINT
-            | libc::PARMRK
-            | libc::ISTRIP
-            | libc::INLCR
-            | libc::IGNCR
-            | libc::ICRNL);
+        tios2.c_cflag &= !(PARENB | CSIZE | CRTSCTS | CBAUD);
+        tios2.c_cflag |= CSTOPB | CS8 | CREAD | CLOCAL | CBAUDEX;
+        tios2.c_lflag &= !(ICANON | ECHO | ECHOE | ECHONL | ISIG);
+        tios2.c_iflag &= !(IXON | IXOFF | IXANY);
+        tios2.c_iflag &= !(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+        tios2.c_oflag &= !(OPOST | ONLCR);
         tios2.c_ospeed = 250000;
         tios2.c_ispeed = 250000;
         serial::tcsets2(fd, &tios2)?;
@@ -112,18 +112,16 @@ impl Port {
 
     fn configure_set_serial(fd: c_int) -> Result<ResetMode, std::io::Error> {
         // Set the termios settings for DMX
+        // The baud should be set to B38400, for special interpretation when configuring
+        // the serial devices divisor
         let oldtios = serial::tcgets(fd)?;
         let mut tios = oldtios;
-        tios.c_cflag |= libc::CLOCAL | libc::CREAD; // Enable receiver and local mode
-        tios.c_cflag &= !(libc::CSIZE | libc::PARENB | libc::CBAUD | libc::CBAUDEX); // 8N1 configuration
-        tios.c_cflag |= libc::CS8 | libc::B38400; // 8 data bits
-        tios.c_iflag &= !(libc::IGNBRK
-            | libc::BRKINT
-            | libc::PARMRK
-            | libc::ISTRIP
-            | libc::INLCR
-            | libc::IGNCR
-            | libc::ICRNL);
+        tios.c_cflag &= !(PARENB | CSIZE | CRTSCTS | CBAUD);
+        tios.c_cflag |= CSTOPB | CS8 | CREAD | CLOCAL | B38400;
+        tios.c_lflag &= !(ICANON | ECHO | ECHOE | ECHONL | ISIG);
+        tios.c_iflag &= !(IXON | IXOFF | IXANY);
+        tios.c_iflag &= !(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+        tios.c_oflag &= !(OPOST | ONLCR);
         tcsets(fd, &oldtios)?;
 
         // Get the serial settings
