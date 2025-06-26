@@ -126,7 +126,7 @@ impl Port {
         if divisor == 0 {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "Invalid baud rate divisor (0)",
+                format!("Invalid divisor: {}. Baud base: {}.", divisor, ss.baud_base)
             ));
         }
         println!("Baud base: {}", ss.baud_base);
