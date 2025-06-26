@@ -140,7 +140,7 @@ impl Port {
         println!("Setting DMX baud rate to: {} Hz", ss.baud_base / divisor);
         println!(
             "Speed error rate: {}%",
-            (new_baud as f64 / 250000f64 * 100.0f64) - 100.0
+            100.0f64 - (new_baud as f64 / 250000f64 * 100.0f64)
         );
         serial::set_serial(fd, &new_ss)?;
         Ok(ResetMode::ResetSerial((ss, oldtios)))
