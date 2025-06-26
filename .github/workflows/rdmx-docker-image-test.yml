@@ -7,6 +7,9 @@ on:
 jobs:
   buildx:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      package: write
     steps:
     - uses: actions/checkout@v4
       name: "Checkout"
