@@ -3,8 +3,9 @@ use crate::serial::{ASYNC_LOW_LATENCY, ASYNC_SPD_CUST, tcsets};
 use clap_derive::ValueEnum;
 use libc::{
     B38400, BRKINT, CBAUD, CBAUDEX, CLOCAL, CREAD, CRTSCTS, CS8, CSIZE, CSTOPB, ECHO, ECHOE,
-    ECHONL, ICANON, ICRNL, IGNBRK, IGNCR, INLCR, ISIG, ISTRIP, IXANY, IXOFF, IXON, ONLCR, OPOST,
-    PARENB, PARMRK, c_int, tcdrain, termios,
+    ECHONL, ICANON, ICRNL, IGNBRK, IGNCR, INLCR, ISIG, ISTRIP, IXANY, IXOFF, IXON, O_NOCTTY,
+    O_NONBLOCK, O_RDWR, ONLCR, OPOST, PARENB, PARMRK, c_int, c_void, close, open, tcdrain, termios,
+    termios2, write,
 };
 use std::ffi::CString;
 use std::os::fd::AsFd;
@@ -20,14 +21,9 @@ fn spin_sleep(duration: std::time::Duration) {
     }
 }
 
-fn open(path: &str) -> Result<c_int, std::io::Error> {
+fn open_tty(path: &str) -> Result<c_int, std::io::Error> {
     let c_path = CString::new(path)?;
-    let fd = unsafe {
-        libc::open(
-            c_path.as_ptr(),
-            libc::O_RDWR | libc::O_NOCTTY | libc::O_NONBLOCK,
-        )
-    };
+    let fd = unsafe { open(c_path.as_ptr(), O_RDWR | O_NOCTTY | O_NONBLOCK) };
     if fd < 0 {
         Err(std::io::Error::last_os_error())
     } else {
@@ -36,7 +32,7 @@ fn open(path: &str) -> Result<c_int, std::io::Error> {
 }
 
 enum ResetMode {
-    ResetTios2(libc::termios2),
+    ResetTios2(termios2),
     ResetSerial((serial::serial_struct, termios)),
 }
 
@@ -69,7 +65,7 @@ impl Drop for Port {
         }
         // Close the file descriptor
         unsafe {
-            libc::close(self.fd);
+            close(self.fd);
         }
     }
 }
@@ -122,7 +118,7 @@ impl Port {
         tios.c_iflag &= !(IXON | IXOFF | IXANY);
         tios.c_iflag &= !(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
         tios.c_oflag &= !(OPOST | ONLCR);
-        tcsets(fd, &oldtios)?;
+        tcsets(fd, &tios)?;
 
         // Get the serial settings
         let ss = serial::get_serial(fd)?;
@@ -134,7 +130,7 @@ impl Port {
             ));
         }
         println!("Baud base: {}", ss.baud_base);
-        println!("Divisor={}", divisor);
+        println!("Divisor: {}", divisor);
         let new_baud = ss.baud_base / divisor;
 
         // Set the serial settings for DMX
@@ -144,14 +140,14 @@ impl Port {
         println!("Setting DMX baud rate to: {} Hz", ss.baud_base / divisor);
         println!(
             "Speed error rate: {}%",
-            new_baud as f64 / 250000f64 * 100.0f64
+            (new_baud as f64 / 250000f64 * 100.0f64) - 100.0
         );
         serial::set_serial(fd, &new_ss)?;
         Ok(ResetMode::ResetSerial((ss, oldtios)))
     }
 
     pub fn open(path: &str, mode: Mode) -> Result<Self, std::io::Error> {
-        let fd = open(path)?;
+        let fd = open_tty(path)?;
         let reset = match mode {
             Mode::Termios2 => Self::configure_termios2(fd),
             Mode::SetSerial => Self::configure_set_serial(fd),
@@ -171,7 +167,7 @@ impl Port {
         // sleep for 12 us - mark after break (MAB)
         //spin_sleep(core::time::Duration::from_micros(12));
         // Write the buffer to the DMX port - typically 513 bytes (512 channels + 1 start code)
-        let res = unsafe { libc::write(self.fd, buf.as_ptr() as *const libc::c_void, buf.len()) };
+        let res = unsafe { write(self.fd, buf.as_ptr() as *const c_void, buf.len()) };
         if res < 0 {
             Err(std::io::Error::last_os_error())
         } else {

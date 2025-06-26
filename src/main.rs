@@ -106,6 +106,9 @@ fn main() -> std::io::Result<()> {
     while !exiting {
         let n = epoll.wait(&mut event_buffer, PollTimeout::NONE)?;
         for event in event_buffer[..n].iter().as_slice() {
+            if exiting {
+                break;
+            }
             match event.data() {
                 EVENT_SIGNAL_NUM => {
                     if let Some(info) = sigfd.read_signal()? {
