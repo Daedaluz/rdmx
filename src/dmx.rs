@@ -2,9 +2,9 @@ use crate::serial;
 use crate::serial::{ASYNC_LOW_LATENCY, ASYNC_SPD_CUST, tcsets};
 use clap_derive::ValueEnum;
 use libc::{
-    B38400, BOTHER, BRKINT, CBAUD, CBAUDEX, CLOCAL, CREAD, CRTSCTS, CS8, CSIZE, CSTOPB, ECHO,
-    ECHOE, ECHONL, ICANON, ICRNL, IGNBRK, IGNCR, INLCR, ISIG, ISTRIP, IXANY, IXOFF, IXON, ONLCR,
-    OPOST, PARENB, PARMRK, c_int, tcdrain, termios,
+    B38400, BRKINT, CBAUD, CBAUDEX, CLOCAL, CREAD, CRTSCTS, CS8, CSIZE, CSTOPB, ECHO, ECHOE,
+    ECHONL, ICANON, ICRNL, IGNBRK, IGNCR, INLCR, ISIG, ISTRIP, IXANY, IXOFF, IXON, ONLCR, OPOST,
+    PARENB, PARMRK, c_int, tcdrain, termios,
 };
 use std::ffi::CString;
 use std::os::fd::AsFd;
