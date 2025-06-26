@@ -4,7 +4,7 @@ use clap_derive::ValueEnum;
 use libc::{
     B38400, BRKINT, CBAUD, CBAUDEX, CLOCAL, CREAD, CRTSCTS, CS8, CSIZE, CSTOPB, ECHO, ECHOE,
     ECHONL, ICANON, ICRNL, IGNBRK, IGNCR, INLCR, ISIG, ISTRIP, IXANY, IXOFF, IXON, O_NOCTTY,
-    O_NONBLOCK, O_RDWR, ONLCR, OPOST, PARENB, PARMRK, c_int, c_void, close, open, tcdrain, termios,
+    O_NONBLOCK, O_RDWR, ONLCR, OPOST, PARENB, PARMRK, c_int, c_void, close, open, termios,
     termios2, write,
 };
 use std::ffi::CString;
@@ -155,21 +155,19 @@ impl Port {
         Ok(Port { fd, reset })
     }
 
-    pub fn write(&self, buf: &[u8]) -> Result<usize, std::io::Error> {
+    pub fn write(&self, buf: &[u8]) -> Result<usize, Box<dyn std::error::Error>> {
         // Make sure everything is written to the port before sending next DMX frame
-        unsafe {
-            tcdrain(self.fd);
-        }
-        serial::set_break(self.fd)?;
+        serial::drain(self.fd).map_err(|e| format!("Failed to drain serial: {}", e))?;
+        serial::set_break(self.fd).map_err(|e| format!("Failed to set break: {}", e))?;
         // sleep for 138 us - Break (BRK)
         spin_sleep(core::time::Duration::from_micros(138));
-        serial::clear_break(self.fd)?;
+        serial::clear_break(self.fd).map_err(|e| format!("Failed to clear break: {}", e))?;
         // sleep for 12 us - mark after break (MAB)
         //spin_sleep(core::time::Duration::from_micros(12));
         // Write the buffer to the DMX port - typically 513 bytes (512 channels + 1 start code)
         let res = unsafe { write(self.fd, buf.as_ptr() as *const c_void, buf.len()) };
         if res < 0 {
-            Err(std::io::Error::last_os_error())
+            Err(format!("Failed to write: {}", std::io::Error::last_os_error()).into())
         } else {
             Ok(res as usize)
         }

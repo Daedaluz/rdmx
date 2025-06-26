@@ -80,3 +80,12 @@ pub fn tcsets(fd: c_int, termios: &termios) -> Result<(), std::io::Error> {
         Err(std::io::Error::last_os_error())
     }
 }
+
+pub fn drain(fd: c_int) -> Result<(), std::io::Error> {
+    let res = unsafe { tcdrain(fd) };
+    if res == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
