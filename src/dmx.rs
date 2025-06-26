@@ -166,7 +166,7 @@ impl Port {
         unsafe {
             tcdrain(self.fd);
         }
-        serial::set_brk(self.fd)?;
+        serial::set_break(self.fd)?;
         // sleep for 138 us - Break (BRK)
         spin_sleep(core::time::Duration::from_micros(138));
         serial::clear_break(self.fd)?;
