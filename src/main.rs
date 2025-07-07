@@ -110,6 +110,7 @@ fn main() -> std::io::Result<()> {
     let mut last_udp_frames = 0; // Last count of UDP frames received
     let mut last_udp_delta = 0;
     let mut last_dmx_delta = 0;
+    let mut first_udp_packet = false;
 
     let mut dmx_write_throttle = TimeSpec::zero();
 
@@ -155,9 +156,13 @@ fn main() -> std::io::Result<()> {
                     // We need to drain all buffered frames to catch up
                     while let Ok(_size) = socket.read(&mut dmx_data[1..]) {
                         udp_frames += 1; // Increment UDP frame count
+                        first_udp_packet = true;
                     }
                 }
                 Event::DMX => {
+                    if !first_udp_packet {
+                        continue;
+                    }
                     let now = nix::time::clock_gettime(nix::time::ClockId::CLOCK_MONOTONIC)?;
                     if now - dmx_write_throttle
                         < TimeSpec::from(Duration::from_millis(1000 / args.throttle))
