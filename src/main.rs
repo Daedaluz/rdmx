@@ -7,11 +7,11 @@ use nix::sys::signalfd::SignalFd;
 use nix::sys::time::{TimeSpec, TimeValLike};
 use nix::sys::timer::{Expiration, TimerSetTimeFlags};
 use nix::sys::timerfd::{ClockId, TimerFd, TimerFlags};
+use num_derive::FromPrimitive;
 use socket2::{Domain, Socket, Type};
 use std::io::Read;
 use std::net::SocketAddr;
 use std::time::Duration;
-use num_derive::FromPrimitive;
 
 mod dmx;
 mod serial;
@@ -34,6 +34,9 @@ struct Args {
     // Throttle DMX writes to avoid flooding
     #[arg(long, short, default_value = "45")]
     throttle: u64,
+
+    #[arg(long, short)]
+    wait_udp: bool,
 
     #[arg(long, short)]
     debug: bool,
@@ -71,15 +74,10 @@ fn main() -> std::io::Result<()> {
         args.device, args.mode
     );
     let dmx_port = dmx::Port::open(args.device.as_str(), args.mode)?;
-
-    let mut mask = SigSet::empty();
-    mask.add(Signal::SIGINT);
-    mask.add(Signal::SIGTERM);
-    mask.add(Signal::SIGUSR1);
+    let mask = SigSet::from_iter([Signal::SIGINT, Signal::SIGTERM, Signal::SIGUSR1]);
     sigprocmask(SigmaskHow::SIG_BLOCK, Some(&mask), None)?;
 
     let sigfd = SignalFd::new(&mask)?;
-
     let ticker = TimerFd::new(ClockId::CLOCK_MONOTONIC, TimerFlags::empty())?;
     let expiration = Expiration::IntervalDelayed(TimeSpec::seconds(1), TimeSpec::seconds(1));
     ticker.set(expiration, TimerSetTimeFlags::empty())?;
@@ -120,7 +118,7 @@ fn main() -> std::io::Result<()> {
             if exiting {
                 break;
             }
-            let event = match num::FromPrimitive::from_u64(event.data()){
+            let event = match num::FromPrimitive::from_u64(event.data()) {
                 Some(val) => val,
                 None => {
                     println!("Received unknown event number: {:?}", event.data());
@@ -160,7 +158,7 @@ fn main() -> std::io::Result<()> {
                     }
                 }
                 Event::DMX => {
-                    if !first_udp_packet {
+                    if !first_udp_packet && args.wait_udp {
                         continue;
                     }
                     let now = nix::time::clock_gettime(nix::time::ClockId::CLOCK_MONOTONIC)?;
